@@ -85,3 +85,23 @@ func (server *Server) listAccounts(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, accounts)
 }
+
+type deleteAccountRequest struct {
+	ID string `uri:"id" binding:"required,uuid"`
+}
+
+func (server *Server) deleteAccount(ctx *gin.Context) {
+	var req deleteAccountRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	err := server.store.DeleteAccount(ctx, uuid.MustParse(req.ID))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.Status(http.StatusOK)
+}

@@ -31,7 +31,6 @@ func createRandomAccount(t *testing.T) Account {
 	return account
 }
 
-
 func TestCreateAccount(t *testing.T) {
 	createRandomAccount(t)
 }
@@ -81,9 +80,8 @@ func TestDeleteAccount(t *testing.T) {
 	require.Empty(t, account2)
 }
 
-
 func TestListAccounts(t *testing.T) {
-	for i :=0; i < 10; i++ {
+	for i := 0; i < 10; i++ {
 		createRandomAccount(t)
 	}
 
@@ -94,8 +92,7 @@ func TestListAccounts(t *testing.T) {
 
 	accounts, err := testQueries.ListAccounts(context.Background(), arg)
 	require.NoError(t, err)
-	// TODO: Fix this test
-	// require.Len(t, accounts, 5)
+	require.Len(t, accounts, 5)
 
 	for _, account := range accounts {
 		require.NotEmpty(t, account)

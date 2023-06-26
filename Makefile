@@ -1,5 +1,5 @@
-USERNAME = set_your_username
-PASSWORD = set_your_password
+USERNAME = root
+PASSWORD = secret
 
 postgres:
 	docker run --name postgres15 -p 5432:5432 -e POSTGRES_USER=${USERNAME} -e POSTGRES_PASSWORD=${PASSWORD} -d postgres:15-alpine

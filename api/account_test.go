@@ -1,7 +1,11 @@
 package api
 
 import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,38 +14,96 @@ import (
 	db "github.com/F34th3R/go_simplebank/db/sqlc"
 	"github.com/F34th3R/go_simplebank/db/util"
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetAccountAPI(t *testing.T) {
 	account := randomAccount()
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	testCases := []struct {
+		name          string
+		accountID     uuid.UUID
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:      "OK",
+			accountID: account.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+					Times(1).
+					Return(account, nil)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				requireBodyMatchAccount(t, recorder.Body, account)
+			},
+		},
+		{
+			name:      "NotFound",
+			accountID: account.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+					Times(1).
+					Return(db.Account{}, sql.ErrNoRows)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:      "InternalError",
+			accountID: account.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+					Times(1).
+					Return(db.Account{}, sql.ErrConnDone)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+		// {
+		// 	name:      "InvalidID",
+		// 	accountID: "invalid",
+		// 	buildStubs: func(store *mockdb.MockStore) {
+		// 		store.EXPECT().
+		// 			GetAccount(gomock.Any(), gomock.Eq(account.ID)).
+		// 			Times(1).
+		// 			Return(db.Account{}, sql.ErrConnDone)
+		// 	},
+		// 	checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+		// 		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		// 	},
+		// },
+	}
 
-	store := mockdb.NewMockStore(ctrl)
+	for i := range testCases {
 
-	// build stubs
-	store.EXPECT().
-		GetAccount(gomock.Any(), gomock.Eq(account.ID)).
-		Times(1).
-		Return(account, nil)
+		tc := testCases[i]
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	// Start test server and send request
-	server := NewServer(store)
-	record := httptest.NewRecorder()
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
 
-	url := fmt.Sprintf("/accounts/%s", account.ID)
-	request, err := http.NewRequest(http.MethodGet, url, nil)
-	require.NoError(t, err)
+			// Start test server and send request
+			server := NewServer(store)
+			record := httptest.NewRecorder()
 
-	server.router.ServeHTTP(record, request)
-	// TODO: fix this test
-	// the test fails because the response is not what we expect 500 != 200
-	// the error is on url := fmt.Sprintf("/accounts/%s", account.ID)
-	// the account.ID is not being converted to a string
-	// the error is: panic: interface conversion: interface {} is uuid.UUID, not string
-	require.Equal(t, http.StatusOK, record.Code)
+			url := fmt.Sprintf("/accounts/%s", tc.accountID)
+			request, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+
+			server.router.ServeHTTP(record, request)
+			tc.checkResponse(t, record)
+		})
+	}
 }
 
 func randomAccount() db.Account {
@@ -51,4 +113,37 @@ func randomAccount() db.Account {
 		Balance:  util.RandomMoney(),
 		Currency: util.RandomCurrency(),
 	}
+}
+
+// TODO: simplify this test // Invalid uuid
+func TestGetAccountAPIUUID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := mockdb.NewMockStore(ctrl)
+
+	// build stubs
+	store.EXPECT().
+		GetAccount(gomock.Any(), gomock.Any()).
+		Times(0)
+
+	server := NewServer(store)
+	record := httptest.NewRecorder()
+
+	url := fmt.Sprintf("/accounts/%s", "invalid")
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	require.NoError(t, err)
+
+	server.router.ServeHTTP(record, request)
+	require.Equal(t, http.StatusBadRequest, record.Code)
+}
+
+func requireBodyMatchAccount(t *testing.T, body *bytes.Buffer, account db.Account) {
+	data, err := ioutil.ReadAll(body)
+	require.NoError(t, err)
+
+	var gotAccount db.Account
+	err = json.Unmarshal(data, &gotAccount)
+	require.NoError(t, err)
+	require.Equal(t, account, gotAccount)
 }

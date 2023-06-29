@@ -106,15 +106,6 @@ func TestGetAccountAPI(t *testing.T) {
 	}
 }
 
-func randomAccount() db.Account {
-	return db.Account{
-		ID:       util.RandomUUID(),
-		Owner:    util.RandomOwner(),
-		Balance:  util.RandomMoney(),
-		Currency: util.RandomCurrency(),
-	}
-}
-
 // TODO: simplify this test // Invalid uuid
 func TestGetAccountAPIUUID(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -136,6 +127,18 @@ func TestGetAccountAPIUUID(t *testing.T) {
 
 	server.router.ServeHTTP(record, request)
 	require.Equal(t, http.StatusBadRequest, record.Code)
+}
+
+// TODO: TestCreateAccountAPI
+// TODO: TestListAccountAPI
+
+func randomAccount() db.Account {
+	return db.Account{
+		ID:       util.RandomUUID(),
+		Owner:    util.RandomOwner(),
+		Balance:  util.RandomMoney(),
+		Currency: util.RandomCurrency(),
+	}
 }
 
 func requireBodyMatchAccount(t *testing.T, body *bytes.Buffer, account db.Account) {
